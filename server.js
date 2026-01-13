@@ -1,4 +1,4 @@
-// server.js - WebRTC Signaling Server
+// server.js - WebRTC Signaling Server (FIXED)
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -23,7 +23,7 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     status: 'Video Call Signaling Server',
-    version: '1.0.0',
+    version: '1.0.1',
     rooms: rooms.size,
     uptime: process.uptime()
   });
@@ -52,6 +52,7 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
+      console.log('Received:', data.type, 'for room:', data.room);
       
       switch(data.type) {
         case 'join':
@@ -60,14 +61,17 @@ wss.on('connection', (ws) => {
           break;
           
         case 'offer':
+          console.log('Broadcasting offer to room:', data.room);
           broadcastToRoom(data.room, data, ws);
           break;
           
         case 'answer':
+          console.log('Broadcasting answer to room:', data.room);
           broadcastToRoom(data.room, data, ws);
           break;
           
         case 'ice-candidate':
+          console.log('Broadcasting ICE candidate to room:', data.room);
           broadcastToRoom(data.room, data, ws);
           break;
           
@@ -102,7 +106,7 @@ function handleJoin(ws, roomId) {
   room.add(ws);
   ws.roomId = roomId;
   
-  console.log(`Client joined room ${roomId}. Room size: ${room.size}`);
+  console.log(`Client joined room ${roomId}. Room size: ${room.size}, Initiator: ${isInitiator}`);
   
   // Notify the client whether they should initiate the connection
   ws.send(JSON.stringify({
@@ -111,21 +115,34 @@ function handleJoin(ws, roomId) {
     roomSize: room.size
   }));
   
-  // If there's already someone in the room, notify them
+  // If there's already someone in the room, notify them too
   if (room.size > 1) {
-    broadcastToRoom(roomId, { type: 'ready', initiator: false }, ws);
+    console.log(`Notifying other peers in room ${roomId}`);
+    broadcastToRoom(roomId, { 
+      type: 'ready', 
+      initiator: false,
+      roomSize: room.size 
+    }, ws);
   }
 }
 
 function broadcastToRoom(roomId, data, sender) {
-  if (!rooms.has(roomId)) return;
+  if (!rooms.has(roomId)) {
+    console.log(`Room ${roomId} not found for broadcast`);
+    return;
+  }
   
   const room = rooms.get(roomId);
+  let sentCount = 0;
+  
   room.forEach(client => {
     if (client !== sender && client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify(data));
+      sentCount++;
     }
   });
+  
+  console.log(`Broadcasted ${data.type} to ${sentCount} clients in room ${roomId}`);
 }
 
 function leaveRoom(ws, roomId) {
