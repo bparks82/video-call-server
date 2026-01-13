@@ -16,7 +16,17 @@ const rooms = new Map();
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', rooms: rooms.size });
+  res.json({ status: 'ok', rooms: rooms.size, uptime: process.uptime() });
+});
+
+// Root endpoint to prevent 404
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'Video Call Signaling Server',
+    version: '1.0.0',
+    rooms: rooms.size,
+    uptime: process.uptime()
+  });
 });
 
 // Create room endpoint (for Calendly integration later)
